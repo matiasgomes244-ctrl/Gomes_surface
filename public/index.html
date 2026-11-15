@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gomes Surface</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0b1020;color:#fff;font-family:Arial,sans-serif;overflow:hidden;touch-action:none}
+.screen{display:none;position:fixed;inset:0;padding:16px;overflow-y:auto}
+.screen.on{display:block}
+h1{text-align:center;margin:10px 0;color:#ffd84d}
+h2{margin:12px 0 6px}
+button{background:#3b82f6;color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:16px;margin:4px}
+button.green{background:#16a34a}button.red{background:#dc2626}button.gray{background:#475569}
+input,select{padding:12px;border-radius:8px;border:0;font-size:16px;margin:4px;max-width:100%}
+.card{background:#16203a;border-radius:12px;padding:12px;margin:8px 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.center{text-align:center}
+.skin{display:inline-block;width:46%;margin:1%;background:#16203a;border-radius:12px;padding:10px;text-align:center;vertical-align:top}
+.dot{width:36px;height:36px;border-radius:50%;margin:0 auto 6px;border:3px solid #fff}
+.Comum{color:#cbd5e1}.Rara{color:#60a5fa}.Epica{color:#c084fc}.Lendaria{color:#fbbf24}.Mitica{color:#f87171}
+#hud{position:fixed;top:0;left:0;right:0;text-align:center;font-size:34px;font-weight:bold;color:#ffd84d;text-shadow:0 2px 6px #000;pointer-events:none;z-index:5;display:none}
+#game{display:none;position:fixed;inset:0;width:100%;height:100%}
+#msg{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#000c;padding:8px 14px;border-radius:10px;display:none;z-index:20}
+</style>
+</head>
+<body>
+
+<div id="hud">0.0s</div>
+<canvas id="game"></canvas>
+<div id="msg"></div>
+
+<div id="sLogin" class="screen on">
+  <h1>Gomes Surface</h1>
+  <div class="card center">
+    <p>Escolha seu nome para jogar</p>
+    <input id="inName" maxlength="16" placeholder="Seu nome">
+    <br><button class="green" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div id="sHome" class="screen">
+  <h1>Gomes Surface</h1>
+  <div class="card center">
+    <div id="who"></div>
+    <button class="green" onclick="startRun()">JOGAR</button>
+    <button onclick="show('sShop');renderShop()">Loja de Skins</button>
+    <button onclick="show('sCodes')">Códigos</button>
+    <button class="gray" onclick="openAdmin()">Admin</button>
+  </div>
+  <h2>Ranking: mais tempo com o Nocoin</h2>
+  <div class="card" id="rank"></div>
+  <div class="center"><button class="gray" onclick="logout()">Sair</button></div>
+</div>
+
+<div id="sShop" class="screen">
+  <h1>Loja de Skins</h1>
+  <div class="center"><b id="shopCoins"></b> <button class="gray" onclick="show('sHome');refreshHome()">Voltar</button></div>
+  <div id="skins"></div>
+</div>
+
+<div id="sCodes" class="screen">
+  <h1>Códigos</h1>
+  <div class="card center">
+    <input id="inCode" placeholder="Digite o código">
+    <br><button class="green" onclick="redeem()">Resgatar</button>
+    <button class="gray" onclick="show('sHome');refreshHome()">Voltar</button>
+  </div>
+</div>
+
+<div id="sOver" class="screen">
+  <h1>Fim da corrida</h1>
+  <div class="card center">
+    <p id="overTxt"></p>
+    <button class="green" onclick="startRun()">Jogar de novo</button>
+    <button class="gray" onclick="show('sHome');refreshHome()">Menu</button>
+  </div>
+</div>
+
+<div id="sAdmin" class="screen">
+  <h1>Painel de Admin</h1>
+  <div class="center"><button class="gray" onclick="show('sHome');refreshHome()">Voltar</button></div>
+  <div class="card">
+    <h2>Dar skin / moedas / banir</h2>
+    <input id="aTarget" placeholder="Nome do jogador">
+    <select id="aSkin"></select>
+    <br><button onclick="adminGiveSkin()">Dar skin</button>
+    <br><input id="aCoins" type="number" placeholder="Moedas">
+    <button onclick="adminGiveCoins()">Dar moedas</button>
+    <br><button class="red" onclick="adminBan(true)">Banir</button>
+    <button class="green" onclick="adminBan(false)">Desbanir</button>
+  </div>
+  <div class="card">
+    <h2>Criar código</h2>
+    <input id="cCode" placeholder="CÓDIGO">
+    <select id="cType"><option value="coins">Moedas</option><option value="skin">Skin</option></select>
+    <select id="cSkin"></select>
+    <input id="cAmount" type="number" placeholder="Quantidade de moedas">
+    <input id="cStock" type="number" placeholder="Estoque (quantas pessoas)">
+    <br><button class="green" onclick="adminCreateCode()">Criar código</button>
+  </div>
+  <div class="card"><h2>Códigos existentes</h2><div id="codeList"></div></div>
+  <div class="card"><h2>Jogadores</h2><div id="playerList"></div></div>
+</div>
+
+<script>
+let P=null,TOKEN=null,ADMIN=null;
+const ADJ=['Azul','Vermelho','Verde','Roxo','Laranja','Rosa','Dourado','Prata','Neon','Sombra'];
+const NOM=['Surfista','Ninja','Robô','Dragão','Fantasma','Pirata','Astro','Lobo','Raio','Gelo'];
+const RAR=[['Comum',0,'Comum'],['Rara',1,'Rara'],['Epica',2,'Épica'],['Lendaria',3,'Lendária'],['Mitica',4,'Mítica']];
+const PRECO=[100,300,800,2000,5000];
+const SKINS=[{id:'classico',nome:'Clássico',cor:'#ffd84d',rar:'Comum',preco:0}];
+for(let i=0;i<110;i++){
+  const r=Math.floor(i/22);
+  const hue=(i*37)%360;
+  SKINS.push({id:'s'+i,nome:NOM[i%10]+' '+ADJ[Math.floor(i/10)%10],cor:'hsl('+hue+',80%,'+(45+(i%3)*8)+'%)',rar:RAR[r][0],preco:PRECO[r]+(i%22)*10});
+}
+function skinById(id){return SKINS.find(s=>s.id===id)||SKINS[0]}
+function show(id){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));document.getElementById(id).classList.add('on');
+  document.getElementById('game').style.display='none';document.getElementById('hud').style.display='none'}
+function toast(t){const m=document.getElementById('msg');m.textContent=t;m.style.display='block';setTimeout(()=>m.style.display='none',2500)}
+async function api(path,body){
+  const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||'Erro');
+  return j;
+}
+function creds(){return {name:P.name,token:TOKEN}}
+async function doLogin(){
+  try{
+    const name=document.getElementById('inName').value.trim();
+    const saved=JSON.parse(localStorage.getItem('gs_'+name)||'null');
+    const j=await api('login',{name,token:saved?saved.token:null});
+    P=j.player;TOKEN=P.token;
+    localStorage.setItem('gs_'+name,JSON.stringify({token:TOKEN}));
+    localStorage.setItem('gs_last',name);
+    show('sHome');refreshHome();
+  }catch(e){toast(e.message)}
+}
+function logout(){P=null;TOKEN=null;show('sLogin')}
+async function refreshHome(){
+  const me=await api('me',creds());P=me.player;
+  document.getElementById('who').innerHTML='<b>'+P.name+'</b> | Moedas: '+P.coins+' | Melhor tempo: '+P.best_time.toFixed(1)+'s';
+  const rk=await (await fetch('/api/ranking')).json();
+  const pos=await api('rank-of-me',creds());
+  let h='';rk.top.forEach((p,i)=>{h+='<div class="row"><span>'+(i+1)+'. '+p.name+'</span><b>'+p.best_time.toFixed(1)+'s</b></div>'});
+  h+='<hr><div class="row"><span>Sua posição: '+pos.position+'</span></div>';
+  document.getElementById('rank').innerHTML=h;
+}
+function renderShop(){
+  document.getElementById('shopCoins').textContent='Moedas: '+P.coins;
+  let h='';
+  SKINS.forEach(s=>{
+    const tem=P.skins.includes(s.id);
+    const eq=P.equipped===s.id;
+    h+='<div class="skin"><div class="dot" style="background:'+s.cor+'"></div><div>'+s.nome+'</div><small class="'+s.rar+'">'+s.rar+'</small><br>';
+    if(eq)h+='<small>Equipada</small>';
+    else if(tem)h+='<button onclick="equip(\''+s.id+'\')">Usar</button>';
+    else h+='<button class="green" onclick="buy(\''+s.id+'\','+s.preco+')">'+s.preco+'</button>';
+    h+='</div>';
+  });
+  document.getElementById('skins').innerHTML=h;
+}
+async function buy(id,preco){try{await api('buy-skin',{...creds(),skinId:id,price:preco});await refreshHome();renderShop();toast('Comprou!')}catch(e){toast(e.message)}}
+async function equip(id){try{await api('equip',{...creds(),skinId:id});await refreshHome();renderShop()}catch(e){toast(e.message)}}
+async function redeem(){
+  try{const j=await api('redeem',{...creds(),code:document.getElementById('inCode').value});
+    toast(j.rewardType==='coins'?'Ganhou '+j.rewardValue+' moedas!':'Ganhou a skin '+skinById(j.rewardValue).nome+'!');
+    document.getElementById('inCode').value='';await refreshHome();
+  }catch(e){toast(e.message)}
+}
+
+/* ADMIN */
+async function openAdmin(){
+  const pw=prompt('Senha do admin');if(!pw)return;
+  try{await api('admin/check',{adminPass:pw});ADMIN=pw;show('sAdmin');fillAdmin();loadAdmin()}catch(e){toast(e.message)}
+}
+function fillAdmin(){
+  const opts=SKINS.map(s=>'<option value="'+s.id+'">'+s.nome+' ('+s.rar+')</option>').join('');
+  document.getElementById('aSkin').innerHTML=opts;document.getElementById('cSkin').innerHTML=opts;
+}
+async function loadAdmin(){
+  const pl=await api('admin/players',{adminPass:ADMIN});
+  document.getElementById('playerList').innerHTML=pl.players.map(p=>'<div class="row"><span>'+p.name+(p.banned?' (BANIDO)':'')+'</span><small>'+p.coins+' moedas | '+p.best_time.toFixed(1)+'s</small></div>').join('');
+  const cd=await api('admin/codes',{adminPass:ADMIN});
+  document.getElementById('codeList').innerHTML=cd.codes.map(c=>'<div class="row"><span>'+c.code+'</span><small>'+c.reward_type+': '+c.reward_value+' | estoque '+c.stock+'</small></div>').join('')||'Nenhum código ainda';
+}
+async function adminGiveSkin(){try{await api('admin/give-skin',{adminPass:ADMIN,target:aTarget.value,skinId:aSkin.value});toast('Skin enviada');loadAdmin()}catch(e){toast(e.message)}}
+async function adminGiveCoins(){try{await api('admin/give-coins',{adminPass:ADMIN,target:aTarget.value,amount:aCoins.value});toast('Moedas enviadas');loadAdmin()}catch(e){toast(e.message)}}
+async function adminBan(b){try{await api('admin/ban',{adminPass:ADMIN,target:aTarget.value,banned:b});toast(b?'Banido':'Desbanido');loadAdmin()}catch(e){toast(e.message)}}
+async function adminCreateCode(){
+  try{
+    const tipo=cType.value;
+    await api('admin/create-code',{adminPass:ADMIN,code:cCode.value,rewardType:tipo,rewardValue:tipo==='coins'?cAmount.value:cSkin.value,stock:cStock.value});
+    toast('Código criado');loadAdmin();
+  }catch(e){toast(e.message)}
+}
+
+/* CORRIDA */
+const cv=document.getElementById('game'),cx=cv.getContext('2d');
+let run=null,raf=null;
+function resize(){cv.width=innerWidth;cv.height=innerHeight}
+addEventListener('resize',resize);
+function startRun(){
+  resize();
+  document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));
+  cv.style.display='block';document.getElementById('hud').style.display='block';
+  run={lane:1,tx:1,y:0,vy:0,slide:0,t0:performance.now(),speed:6,obs:[],coins:[],spawn:0,dead:false,dist:0,onTrain:false};
+  cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+}
+function laneX(l){return cv.width/2+(l-1)*Math.min(cv.width/3.4,130)}
+function spawnStuff(){
+  const r=run;
+  const lane=Math.floor(Math.random()*3);
+  const kind=Math.random();
+  if(kind<0.35)r.obs.push({lane,z:0,type:'train',len:260+Math.random()*180});
+  else if(kind<0.65)r.obs.push({lane,z:0,type:'barrier',len:40});
+  else if(kind<0.8)r.obs.push({lane,z:0,type:'low',len:40});
+  for(let i=0;i<4;i++)r.coins.push({lane:Math.floor(Math.random()*3),z:-i*60,got:false});
+}
+function die(){
+  if(run.dead)return;run.dead=true;
+  const t=(performance.now()-run.t0)/1000;
+  api('finish',{...creds(),time:t}).then(j=>{
+    document.getElementById('overTxt').textContent='Você perdeu o Nocoin! Tempo: '+t.toFixed(1)+'s | Ganhou '+j.earned+' moedas | Recorde: '+j.best.toFixed(1)+'s';
+    show('sOver');
+  }).catch(()=>{document.getElementById('overTxt').textContent='Tempo: '+t.toFixed(1)+'s';show('sOver')});
+}
+function loop(){
+  const r=run;if(!r)return;
+  const t=(performance.now()-r.t0)/1000;
+  r.speed=6+t*0.12;
+  document.getElementById('hud').textContent=t.toFixed(1)+'s';
+  r.spawn-=r.speed;
+  if(r.spawn<=0){spawnStuff();r.spawn=Math.max(110,260-t*2)}
+  r.tx+=(r.lane-r.tx)*0.25;
+  r.vy-=0.9;r.y+=r.vy;
+  let floor=0;r.onTrain=false;
+  const py=cv.height-160;
+  r.obs.forEach(o=>{o.z+=r.speed;});
+  r.coins.forEach(c=>{c.z+=r.speed;});
+  r.obs.forEach(o=>{
+    if(o.lane!==r.lane)return;
+    const near=o.z>py-o.len-20&&o.z-o.len<py+20;
+    if(near){
+      if(o.type==='train'){ if(r.y>=60) floor=Math.max(floor,70); else die(); }
+      else if(o.type==='barrier'){ if(r.y<30) die(); }
+      else if(o.type==='low'){ if(r.slide<=0) die(); }
+    }
+  });
+  if(r.y<floor){r.y=floor;r.vy=0}
+  if(r.y<0){r.y=0;r.vy=0}
+  if(r.slide>0)r.slide--;
+  r.coins.forEach(c=>{if(!c.got&&c.lane===r.lane&&Math.abs(c.z-py)<30&&r.y<40){c.got=true;die()}});
+  r.obs=r.obs.filter(o=>o.z-o.len<cv.height+50);
+  r.coins=r.coins.filter(c=>c.z<cv.height+50);
+  draw(t);
+  if(!r.dead)raf=requestAnimationFrame(loop);
+}
+function draw(t){
+  const r=run;
+  cx.fillStyle='#0b1020';cx.fillRect(0,0,cv.width,cv.height);
+  for(let l=0;l<3;l++){
+    const x=laneX(l);
+    cx.fillStyle=l%2?'#1b2742':'#16203a';cx.fillRect(x-60,0,120,cv.height);
+  }
+  r.obs.forEach(o=>{
+    const x=laneX(o.lane);
+    if(o.type==='train'){cx.fillStyle='#64748b';cx.fillRect(x-50,o.z-o.len,100,o.len);cx.fillStyle='#94a3b8';cx.fillRect(x-50,o.z-o.len,100,14)}
+    else if(o.type==='barrier'){cx.fillStyle='#ef4444';cx.fillRect(x-50,o.z-30,100,30)}
+    else{cx.fillStyle='#f59e0b';cx.fillRect(x-50,o.z-60,100,18)}
+  });
+  r.coins.forEach(c=>{
+    if(c.got)return;const x=laneX(c.lane);
+    cx.fillStyle='#ffd84d';cx.beginPath();cx.arc(x,c.z,13,0,7);cx.fill();
+    cx.fillStyle='#000';cx.font='bold 14px Arial';cx.textAlign='center';cx.fillText('N',x,c.z+5);
+  });
+  const sk=skinById(P.equipped);
+  const px=laneX(r.lane);
+  const py=cv.height-160-r.y;
+  cx.fillStyle=sk.cor;
+  const h=r.slide>0?26:50;
+  cx.fillRect(px-18,py-h+(r.slide>0?24:0),36,h);
+  cx.fillStyle='#fff';cx.fillRect(px-10,py-h+(r.slide>0?28:6),8,8);
+}
+
+/* CONTROLES */
+addEventListener('keydown',e=>{
+  if(!run||run.dead)return;
+  if(e.key==='ArrowLeft'||e.key==='a')run.lane=Math.max(0,run.lane-1);
+  if(e.key==='ArrowRight'||e.key==='d')run.lane=Math.min(2,run.lane+1);
+  if((e.key==='ArrowUp'||e.key==='w'||e.key===' ')&&run.y<=1)run.vy=16;
+  if(e.key==='ArrowDown'||e.key==='s')run.slide=30;
+});
+let sx=0,sy=0;
+addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+addEventListener('touchend',e=>{
+  if(!run||run.dead)return;
+  const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx>30)run.lane=Math.min(2,run.lane+1);else if(dx<-30)run.lane=Math.max(0,run.lane-1);
+  }else{
+    if(dy<-30&&run.y<=1)run.vy=16;else if(dy>30)run.slide=30;
+  }
+},{passive:true});
+
+/* AUTO-LOGIN */
+(async()=>{
+  const last=localStorage.getItem('gs_last');
+  if(last){const s=JSON.parse(localStorage.getItem('gs_'+last)||'null');
+    if(s){document.getElementById('inName').value=last;doLogin()}}
+})();
+</script>
+</body>
+  </html>
